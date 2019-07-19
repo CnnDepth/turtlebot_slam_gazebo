@@ -17,7 +17,7 @@ This class has the following params:
 * `name` - name of Turtlebot model in Gazebo. Default is `turtlebot3`
 * `max_angular_speed` - maximum speed of Turtlebot's rotation (in rad/s). Without constraints, Turtlebot will be rotate with such angular speed. Default is 0.5
 * `max_linear_speed` - maximum speed of Turtlebot's movement (in m/s). In case of moving by line, or by circle with enough big radius, Turtlebot moves with this linear speed. Default is 0.5
-* `trajectory_type` - type of Turtlebot's trajectory. If this parameter is set as `line`, Turtlebot rotates until it is oriented to destination, then moves directly. If this parameter is set as `circle`, Turtlebot moves along arc of circle until it is oriented to destination, then moves directly. Default is `line`
+* `trajectory_type` - type of Turtlebot's trajectory. If this parameter is set as `line`, Turtlebot rotates until it is directed to destination, then moves directly, along line. If this parameter is set as `circle`, Turtlebot moves along arc of circle until it is directed to destination, then moves directly, along line. Default is `line`
 
 Movement is performed with `move_to` method of the class. This method takes two float numbers - coordinates of the destination.
 
@@ -31,7 +31,7 @@ To move Turtlebot in Gazebo environments, make the following steps:
 
 `export TURTLEBOT3_MODEL=waffle_pi`
 
-3) Launch Gazebo with Turtlebot in some environment, for example, `turtlebot_house`:
+3) Launch Gazebo with Turtlebot in some environment, for example, `turtlebot3_house`:
 
 `roslaunch turtlebot3_gazebo turtlebot3_house.launch`
 
@@ -40,6 +40,8 @@ To move Turtlebot in Gazebo environments, make the following steps:
 ```python
 from turtlebot_mover import TurtlebotMover
 mover = TurtlebotMover(max_angular_speed=0.5, max_linear_speed=0.5, trajectory_type='line')
+x = 0
+y = 0
 mover.move_to(x, y)
 ```
 
