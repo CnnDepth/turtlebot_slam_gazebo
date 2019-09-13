@@ -15,7 +15,8 @@ class TurtlebotMover:
 		         max_angular_speed=0.5,
 		         max_linear_speed=0.5,
 		         trajectory_type='line',
-		         rate=50
+		         rate=50,
+		         ground_z='auto'
 		         ):
 		self.model_name = name
 		self.get_state = rospy.ServiceProxy('/gazebo/get_model_state', GetModelState)
@@ -23,7 +24,6 @@ class TurtlebotMover:
 		self.state.model_name = self.model_name
 		initial_state = self.get_state(self.model_name, '')
 		self.state.pose = initial_state.pose
-		self.ground_z = self.state.pose.position.z
 		self.rate = rate
 		self.angular_speed = max_angular_speed
 		self.linear_speed = max_linear_speed
@@ -31,6 +31,26 @@ class TurtlebotMover:
 		self.eps = 1e-4
 		rospy.init_node('move_robot')
 		self.state_publisher = rospy.Publisher("/gazebo/set_model_state", ModelState, latch=True)
+		if ground_z == 'auto':
+			self.ground_z = self.state.pose.position.z
+		else:
+			self.ground_z = ground_z
+			self.state.pose.position.z = self.ground_z
+			self.state_publisher.publish(self.state)
+
+	def return_home(self):
+		position = self.state.pose.position
+		position.x = 5.95949535768
+		position.y = -5.29778437088
+		orientation = self.state.pose.orientation
+		orientation.x = -0.00108010263963
+		orientation.y = 0.00116795965678
+		orientation.z = 0.677733524066
+		orientation.w = 0.735305881662
+		self.state.pose.position = position
+		self.state.pose.orientation = orientation
+		self.state_publisher.publish(self.state)
+		rospy.sleep(0.5)
 
 	def get_position(self):
 		return self.state.pose.position
