@@ -3,10 +3,21 @@
 import rospy
 from gazebo_msgs.srv import GetModelState
 from gazebo_msgs.msg import ModelState
-from geometry_msgs.msg import Pose
+from geometry_msgs.msg import Pose, PoseStamped
+from nav_msgs.msg import Path
 import math
 import tf
 import timeit
+
+def transform(x, y, start_x, start_y, start_angle):
+    new_x = x * math.cos(start_angle) + y * math.sin(start_angle) + start_x
+    new_y = (-x) * math.sin(start_angle) + y * math.cos(start_angle) + start_y
+    return new_x, new_y
+
+def inverse_transform(x, y, start_x, start_y, start_angle):
+    new_x = (x - start_x) * math.cos(start_angle) + (y - start_y) * math.sin(start_angle)
+    new_y = -(x - start_x) * math.sin(start_angle) + (y - start_y) * math.cos(start_angle)
+    return new_x, new_y
 
 class TurtlebotMover:
 
@@ -37,6 +48,40 @@ class TurtlebotMover:
 			self.ground_z = ground_z
 			self.state.pose.position.z = self.ground_z
 			self.state_publisher.publish(self.state)
+		self.initial_state = self.get_state(self.model_name, '')
+		self.start_x = self.initial_state.pose.position.x
+		self.start_y = self.initial_state.pose.position.y
+		_, __, self.start_angle = self.get_orientation_angles()
+		self.true_trajectory = []
+		self.path = Path()
+		self.true_path_publisher = rospy.Publisher('/true_path', Path, queue_size=0)
+		self.update_true_path()
+
+	def get_pose_in_rviz_coords(self):
+		current_pose_local = PoseStamped()
+		current_x = self.state.pose.position.x
+		current_y = self.state.pose.position.y
+		x, y, z = self.get_orientation_angles()
+		local_orientation = tf.transformations.quaternion_from_euler(x, y, z - self.start_angle)
+		current_x_local, current_y_local = inverse_transform(current_x, current_y, self.start_x, self.start_y, self.start_angle)
+		current_pose_local.pose.position.x = current_x_local
+		current_pose_local.pose.position.y = current_y_local
+		current_pose_local.pose.position.z
+		current_pose_local.pose.orientation.x = local_orientation[0]
+		current_pose_local.pose.orientation.y = local_orientation[1]
+		current_pose_local.pose.orientation.z = local_orientation[2]
+		current_pose_local.pose.orientation.w = local_orientation[3]
+		return current_pose_local
+
+	def update_true_path(self):
+		current_pose_local = self.get_pose_in_rviz_coords()
+		current_pose_local.header.stamp = rospy.Time.now()
+		current_pose_local.header.frame_id = 'map'
+		self.true_trajectory.append(current_pose_local)
+		self.path.header.stamp = rospy.Time.now()
+		self.path.header.frame_id = 'map'
+		self.path.poses = self.true_trajectory
+		self.true_path_publisher.publish(self.path)
 
 	def return_home(self):
 		position = self.state.pose.position
@@ -135,6 +180,7 @@ class TurtlebotMover:
 			# set and publish state with this position
 			self.state.pose = interm_pose
 			self.state_publisher.publish(self.state)
+			self.update_true_path()
 			rospy.sleep(1. / self.rate - (timeit.default_timer() - start_time))
 		# after smooth moving, set target position
 		self.state.pose.position.x = target_x
@@ -164,6 +210,7 @@ class TurtlebotMover:
 			interm_pose.orientation.w = quaternion[3]
 			self.state.pose = interm_pose
 			self.state_publisher.publish(self.state)
+			self.update_true_path()
 			rospy.sleep(1. / self.rate - (timeit.default_timer() - start_time))
 
 	def move_to(self, x, y):
@@ -186,7 +233,10 @@ class TurtlebotMover:
 			target_angle = math.atan2(y - cur_y, x - cur_x)
 			alpha = self.normalize(target_angle - z_angle)
 			l = math.sqrt((x - cur_x) ** 2 + (y - cur_y) ** 2)
-			r_max = l / (2 * math.sin(min(abs(alpha), math.pi - abs(alpha))))
+			if abs(alpha) < 1e-5:
+				r_max = 1e5
+			else:
+				r_max = l / (2 * math.sin(min(abs(alpha), math.pi - abs(alpha))))
 			# choose r - minimum of r_opt and r_max and find center of a circle with radius r
 			r = min(r_opt, r_max)
 			if abs(r) < self.eps:
@@ -207,7 +257,8 @@ class TurtlebotMover:
 			else:
 				trg_circ_angle = self.normalize(math.atan2(y - center_y, x - center_x) - beta + math.pi / 2.)
 			# move robot along chosen circle, from source angle to target angle, and after move it forwardly to destination
-			self.move_along_circle(center_x, center_y, r, src_circ_angle, trg_circ_angle, 2 * (alpha > 0) - 1)
+			if abs(alpha) > 1e-5:
+				self.move_along_circle(center_x, center_y, r, src_circ_angle, trg_circ_angle, 2 * (alpha > 0) - 1)
 			self.move_forward_to(x, y)
 		else:
 			raise NotImplementedError
